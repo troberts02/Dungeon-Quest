@@ -1,0 +1,1 @@
+Hello the modules you'll need to install are keyboard, pygame, colorama also be sure to have python 3.12 installed 
