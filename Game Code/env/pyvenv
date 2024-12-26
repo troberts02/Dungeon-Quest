@@ -1,0 +1,5 @@
+home = C:\Users\Trob5\AppData\Local\Programs\Python\Python312
+include-system-site-packages = false
+version = 3.12.5
+executable = C:\Users\Trob5\AppData\Local\Programs\Python\Python312\python.exe
+command = C:\Users\Trob5\AppData\Local\Programs\Python\Python312\python.exe -m venv C:\Users\Trob5\Desktop\skeleton-code-main\Skeleton Code 1.0.1\Gmae_skeleton_code\env
