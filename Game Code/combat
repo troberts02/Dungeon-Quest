@@ -1,0 +1,299 @@
+import os
+# Hides the pygame message
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import random, keyboard, pygame, json, time
+from enemy_animations import attack, damage1, nutral
+
+
+class Enemy:
+    def __init__(self, name, health, melee_damage, fireball_damage, attack_preference, 
+                 fireball_weakness=1.0, melee_weakness=1.0, fireball_resistance=1.0, melee_resistance=1.0):
+        self.name = name
+        self.max_health = health  # Store the original health
+        self.health = health
+        self.melee_damage = melee_damage
+        self.fireball_damage = fireball_damage
+        self.attack_preference = attack_preference
+        self.fireball_weakness = fireball_weakness
+        self.melee_weakness = melee_weakness
+        self.fireball_resistance = fireball_resistance
+        self.melee_resistance = melee_resistance
+
+    def reset_health(self):
+        """Reset the enemy's health to its original value."""
+        self.health = self.max_health
+
+    def choose_attack(self):
+        # Enemy chooses an attack based on its attack preference
+        return random.choices(["Melee", "Fireball"], weights=self.attack_preference, k=1)[0]
+
+    def take_damage(self, damage, attack_type):
+        if self.name == "Giant Flame Skull" and attack_type == "Fireball":
+            healing_amount = -damage * self.fireball_resistance
+            self.health += healing_amount
+            print(f"Oh no! You healed it! {self.name} gains {healing_amount} health. Health now: {self.health}")
+            return False  # GFB is not defeated
+        else:
+            if attack_type == "Fireball":
+                damage *= self.fireball_weakness * self.fireball_resistance
+            elif attack_type == "Melee":
+                damage *= self.melee_weakness * self.melee_resistance
+            
+            self.health -= damage
+            self.health = max(self.health, 0)  # Ensure health does not go below 0
+            
+            print(f"{self.name} takes {damage} damage! Health remaining: {self.health}")
+            
+            return self.health == 0  # Return True if the enemy's health is 0
+
+# Class to manage player stats and EXP 
+class PlayerStats:
+    def __init__(self, health=100, melee_damage=20, fireball_damage=20, exp=0):
+        self.health = health
+        self.melee_damage = melee_damage
+        self.fireball_damage = fireball_damage
+        self.exp = exp
+
+    @classmethod
+    def load_from_file(cls, filename="player_stats.json"):
+        if os.path.exists(filename):
+            with open(filename, "r") as f:
+                data = json.load(f)
+                return cls(**data)
+        else:
+            return cls()
+
+    def save_to_file(self, filename="player_stats.json"):
+        with open(filename, "w") as f:
+            json.dump(self.__dict__, f)
+
+    def reset(self):
+        print("Player stats reset due to defeat.")
+        self.health = 100
+        self.melee_damage = 20
+        self.fireball_damage = 20
+        self.exp = 0
+        self.save_to_file()
+
+    def add_experience(self, amount):
+        print(f"Player gained {amount} EXP.")
+        self.exp += amount
+        while self.exp >= 30:  # Level up every 30 EXP
+            print("Level up! Stats increased.")
+            self.exp -= 30
+            self.health += 5
+            self.melee_damage += 5
+            self.fireball_damage += 5
+        self.save_to_file()
+
+def gain_exp_for_enemy(enemy_name):
+    if enemy_name == "Baby Dragon":
+        return random.randint(30, 50)  # Dragon gives 30-50 EXP
+    else:
+        return random.randint(10, 15)  # Other enemies give 10-15 EXP
+
+
+# Define enemies
+wizard = Enemy(
+    name="Mad Wizard",
+    health=100,
+    melee_damage=10,
+    fireball_damage=20,
+    attack_preference=[1, 3],  # More likely to choose Fireball (75% chance)
+    melee_weakness=1.5,        # Takes 50% more damage from melee attacks
+    fireball_resistance=0.5    # Takes half damage from fireball attacks
+)
+
+skeleton = Enemy(
+    name="Rampaging Skeleton",
+    health=80,
+    melee_damage=20,
+    fireball_damage=0,  # No fireball attack
+    attack_preference=[4, 0],  # Skeleton only uses Melee attacks
+    fireball_weakness=1.5,  # Takes 50% more damage from fireball spells
+    melee_resistance=0.5   # Takes half damage from melee attacks
+)
+
+GFB = Enemy(
+    name="Giant Flame Skull",
+    health=120,
+    melee_damage=0,  # No Melee Attack
+    fireball_damage=25,
+    attack_preference=[0, 4],  # GFB only uses Fireball attacks
+    fireball_resistance=-0.5,  # Fireball attack heals GFB
+    melee_weakness=2,
+)
+
+Mimic = Enemy(
+    name="Mimic",
+    health=100,  
+    melee_damage=20,
+    fireball_damage=20,
+    attack_preference=[1, 1],  # Equal chance for Melee and Fireball
+    fireball_weakness=1.0,
+    melee_weakness=1.0,
+    fireball_resistance=1.0,
+    melee_resistance=1.0
+)
+
+Goblin = Enemy(
+    name="Goblin",
+    health=60,
+    melee_damage=15,
+    fireball_damage=10,
+    attack_preference=[3, 1],  # Goblin has a 75% chance to use melee
+    
+)
+
+# Dragon = Enemy(
+#     name="Baby Dragon",
+#     health=200,
+#     melee_damage=35,
+#     fireball_damage=40,
+#     attack_preference=[4, 6],
+#     fireball_resistance=0.7,  # Takes 70% of damage from all attacks
+#     melee_resistance=0.7
+# )
+
+
+
+enemies = [wizard, skeleton, GFB, Mimic, Goblin]
+
+#this is for the enemy death "animation", it flashed between the neutral sprite and the damage sprite. Go to line 229 to edit how many times
+def switch_between_states(name, switch_count=3, delay=0.5):
+    """Switches between 'nutral' and 'damage' states for the given enemy name."""
+    nutral_path = os.path.join(name, "nutral.txt")
+    damage_path = os.path.join(name, "damage.txt")
+
+    for i in range(switch_count):
+        # Display 'nutral' state
+        try:
+            with open(nutral_path, "r") as f:
+                print(f"Displaying nutral state for {name}:\n{f.read()}")
+        except FileNotFoundError:
+            print(f"File not found: {nutral_path}")
+        
+        time.sleep(delay)  # Pause for readability
+
+        # Display 'damage' state
+        try:
+            with open(damage_path, "r") as f:
+                print(f"Displaying damage state for {name}:\n{f.read()}")
+        except FileNotFoundError:
+            print(f"File not found: {damage_path}")
+
+        time.sleep(delay)  # Pause before next switch
+
+# Update the battle function to call switch_between_states instead of damage1
+def battle(player_health, enemy):
+    # Reset enemy health at the beginning of each battle
+    enemy.reset_health()
+
+    player_stats = PlayerStats.load_from_file()
+    player_health = player_stats.health
+    player_melee_damage = player_stats.melee_damage
+    player_fireball_damage = player_stats.fireball_damage
+
+    # Update the Mimic's stats to match the player's stats before battle begins
+    if enemy.name == "Mimic":
+        enemy.health = player_health
+        enemy.melee_damage = player_melee_damage
+        enemy.fireball_damage = player_fireball_damage
+
+
+    while player_health > 0 and enemy.health > 0:
+        print(f"Your health: {player_health}")
+        print(f"{enemy.name}'s health: {enemy.health}\n")
+        user_choice = input("Choose your attack (M for Melee, F for Fireball): ").lower()
+        
+        if user_choice not in ['m', 'f']:
+            print("Invalid choice. Please choose again.\n")
+            continue
+
+        if user_choice == 'm':
+            damage = player_melee_damage
+            attack_type = "Melee"
+            print(f"You chose Melee. You deal {damage} damage to the {enemy.name}.")
+            damage1(enemy.name)  # Show enemy's damage reaction sprite
+            
+        else:
+            damage = player_fireball_damage
+            attack_type = "Fireball"
+            print(f"You chose Fireball. You deal {damage} damage to the {enemy.name}.")
+            if enemy.name != "Giant Flame Skull":
+                damage1(enemy.name)  # Show enemy's damage reaction sprite
+
+        enemy_defeated = enemy.take_damage(damage, attack_type)
+        if enemy_defeated:
+            print(f"You have defeated the {enemy.name}!\n")
+            exp_gain = gain_exp_for_enemy(enemy.name)
+            player_stats.add_experience(exp_gain)
+            
+            # Flash between neutral and damage sprites to simulate defeat
+            for _ in range(4):  # Adjust this number to change the flash count
+                nutral(enemy.name)
+                time.sleep(0.3)
+                damage1(enemy.name)
+                time.sleep(0.3)
+            
+            print(f"You gained {exp_gain} EXP!")
+            break
+
+        # this adds a delay before the enemy attacks, makes the game feel more dynamic
+        print(f"{enemy.name} was hit!")
+        time.sleep(1.5)  # this waits 1.5 seconds for the enemy to respond and attack, change this number if needed
+
+        print(f"{enemy.name}'s turn to attack!\n")
+        attack(enemy.name)  # Displays enemy attack sprite
+        time.sleep(.5)
+
+        # Determine enemy attack choice
+        enemy_choice = enemy.choose_attack() if enemy.name != "Mimic" else attack_type
+        print(f"{enemy.name} uses {enemy_choice}!")
+
+        if enemy_choice == "Melee":
+            player_health -= enemy.melee_damage
+            print(f"{enemy.name} uses Melee. You take {enemy.melee_damage} damage. Your health: {player_health}")
+        else:
+            player_health -= enemy.fireball_damage
+            print(f"{enemy.name} uses Fireball. You take {enemy.fireball_damage} damage. Your health: {player_health}")
+
+        if player_health <= 0:
+            print(f"Game over! You have been defeated by the {enemy.name}. Your health: 0\n")
+            pygame.mixer.init()
+            try:
+                pygame.mixer.music.load("PlayerScream.mp3")
+                pygame.mixer.music.play()
+                pygame.time.delay(3000)
+            except pygame.error as e:
+                print(f"Error loading sound: {e}")
+            player_stats.reset()
+            break
+
+
+
+
+
+def main(rand, preset_enemy):
+    print(f"Debug: Received input for main: {rand} {preset_enemy}")
+    player_stats = PlayerStats.load_from_file()
+
+    if rand == "true":
+        print("made it to random")
+        preset_enemy = random.choice(enemies)
+        print(preset_enemy)
+    else:
+        if isinstance(preset_enemy, list):
+            preset_enemy = preset_enemy[0]  # Extract from list if necessary
+
+        # Match preset_enemy to an Enemy object
+        enemy_object = next((enemy for enemy in enemies if enemy.name == preset_enemy), None)
+        if enemy_object is None:
+            print(f"Enemy '{preset_enemy}' not found.")
+            return
+        preset_enemy = enemy_object  # Ensure it's an Enemy instance
+
+    nutral(preset_enemy.name)  # Call nutral with the enemy's name
+    battle(player_stats.health, preset_enemy)
+
+
